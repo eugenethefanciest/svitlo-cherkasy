@@ -1,0 +1,13 @@
+name: Тести скрипта
+
+on:
+  push:
+    paths: ["scripts/**", "tests/**"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/test_update.py

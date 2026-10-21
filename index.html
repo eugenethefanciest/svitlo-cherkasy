@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Мапа Черкас: де зараз є світло, а де відключення за графіком Черкасиобленерго. Оновлюється автоматично.">
+<meta property="og:title" content="Світло в Черкасах"><meta property="og:description" content="Жива мапа зон зі світлом і без за графіком погодинних відключень">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Світло в Черкасах</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style id="appstyle">
+/* Layout: full-bleed map canvas; floating dispatcher panels — status strip on top, subqueue board + time scrubber at the bottom. */
+:root{
+  --bg:#e9e6df; --land:#e9e6df; --water:#b9d2e2; --park:#d3dfc6; --road:#ffffff; --road-edge:#d6d1c6; --rail:#a8a49b;
+  --ink:#1d2126; --ink-2:#565c64; --panel:#fbfaf7; --panel-line:#dcd7cc;
+  --on:#1fae5b; --on-glow:rgba(31,174,91,.32); --on-soft:#d7f0e1;
+  --off:#5d6168; --off-zone:#62666d; --off-soft:#e3e3e3; --unknown:#cbc6bb; --mixed:#c98a12;
+  --accent:#1fae5b; --sel:#0f62d6; --label:#4c5157; --label-halo:rgba(255,255,255,.9);
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  --shadow:0 6px 24px rgba(30,30,25,.14),0 1px 3px rgba(30,30,25,.12);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1318; --land:#11161c; --water:#0b1d2b; --park:#14211b; --road:#2a313a; --road-edge:#1a2027; --rail:#3a4049;
+  --ink:#eef1f4; --ink-2:#9aa3ad; --panel:#171c22; --panel-line:#2a313a;
+  --on:#5cf08f; --on-glow:rgba(92,240,143,.30); --on-soft:#173626;
+  --off:#3b4048; --off-zone:#58606b; --off-soft:#262b32; --unknown:#232931; --mixed:#e3a53a;
+  --accent:#5cf08f; --sel:#6aa8ff; --label:#8b949e; --label-halo:rgba(15,19,24,.9);
+  --shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1318; --land:#11161c; --water:#0b1d2b; --park:#14211b; --road:#2a313a; --road-edge:#1a2027; --rail:#3a4049;
+  --ink:#eef1f4; --ink-2:#9aa3ad; --panel:#171c22; --panel-line:#2a313a;
+  --on:#5cf08f; --on-glow:rgba(92,240,143,.30); --on-soft:#173626;
+  --off:#3b4048; --off-zone:#58606b; --off-soft:#262b32; --unknown:#232931; --mixed:#e3a53a;
+  --accent:#5cf08f; --sel:#6aa8ff; --label:#8b949e; --label-halo:rgba(15,19,24,.9);
+  --shadow:0 8px 28px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.4); color-scheme:dark}
+html,body,#root{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hidden}
+#app{position:relative;height:100%;width:100%}
+#map{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab;display:block}
+#map.drag{cursor:grabbing}
+.panel{background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;box-shadow:var(--shadow)}
+/* top bar */
+.top{position:absolute;top:10px;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));display:flex;gap:10px;align-items:flex-start;pointer-events:none;flex-wrap:wrap}
+.top > *{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:12px;padding:10px 14px}
+.bulb{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 50% 45%,var(--on) 0 38%,var(--on-glow) 40% 100%);flex:none;box-shadow:0 0 18px var(--on-glow)}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:15px;letter-spacing:.01em;margin:0;line-height:1.15;text-wrap:balance}
+.brand .sub{font-size:12px;color:var(--ink-2);margin-top:2px}
+.clock{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.search{position:relative;flex:1 1 240px;max-width:380px;min-width:0}
+.search input{width:100%;box-sizing:border-box;font:inherit;font-size:14px;padding:12px 14px 12px 38px;border-radius:14px;border:1px solid var(--panel-line);background:var(--panel);color:var(--ink);box-shadow:var(--shadow);outline:none}
+.search input:focus-visible{border-color:var(--sel);box-shadow:0 0 0 3px color-mix(in srgb,var(--sel) 25%,transparent),var(--shadow)}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--ink-2)}
+.results{position:absolute;top:calc(100% + 6px);left:0;right:0;max-height:300px;overflow:auto;padding:6px;z-index:5}
+.results button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;font:inherit;font-size:14px;background:none;border:0;color:var(--ink);padding:9px 10px;border-radius:9px;cursor:pointer}
+.results button:hover,.results button:focus-visible{background:var(--off-soft);outline:none}
+.results .q{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.results .none{padding:10px;color:var(--ink-2);font-size:13px}
+.tools{display:flex;gap:8px;margin-left:auto}
+.btn{font:inherit;font-size:13px;font-weight:600;border-radius:12px;border:1px solid var(--panel-line);background:var(--panel);color:var(--ink);padding:10px 14px;cursor:pointer;box-shadow:var(--shadow)}
+.btn:hover{border-color:var(--ink-2)}
+.btn:focus-visible{outline:3px solid color-mix(in srgb,var(--sel) 40%,transparent);outline-offset:1px}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+/* bottom board */
+.bottom{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:12px;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.bottom > *{pointer-events:auto}
+.board{padding:12px;display:flex;flex-direction:column;gap:10px;max-width:760px}
+.board-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.board-head .t{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-2);font-weight:600}
+.board-head .when{font-size:13px;color:var(--ink-2)}
+.board-head .when b{color:var(--ink);font-family:var(--f-mono);font-weight:500}
+.chips{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.chip{font:inherit;text-align:left;border:1px solid var(--panel-line);border-radius:11px;padding:8px 9px;background:var(--panel);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0}
+.chip .n{font-family:var(--f-display);font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px}
+.chip .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.chip.on .dot{background:var(--on);box-shadow:0 0 8px var(--on-glow)}
+.chip.off .dot{background:var(--off)}
+.chip .s{font-size:12px;font-weight:600}
+.chip.on .s{color:var(--on)}
+.chip.off .s{color:var(--ink-2)}
+.chip .nx{font-size:11px;color:var(--ink-2);font-family:var(--f-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:inline-flex;border:1px solid var(--panel-line);border-radius:10px;padding:2px;gap:2px;background:var(--bg)}
+.seg button{font:inherit;font-size:12px;font-weight:600;border:0;background:none;color:var(--ink-2);padding:5px 11px;border-radius:8px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.seg button:focus-visible{outline:2px solid var(--sel)}
+.board-head{align-items:center}
+.chip[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.chip:focus-visible{outline:3px solid color-mix(in srgb,var(--sel) 40%,transparent)}
+.scrub{display:flex;align-items:center;gap:10px}
+.scrub input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+.scrub .tm{font-family:var(--f-mono);font-size:14px;min-width:46px;text-align:right}
+.scrub .btn{box-shadow:none;padding:7px 11px;font-size:12px}
+.ticks{position:relative;height:6px;margin:0 2px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);align-items:center}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px}
+.legend .l-on{background:var(--on);box-shadow:0 0 8px var(--on-glow)}
+.legend .l-off{background:var(--off)}
+.legend .l-unk{background:var(--unknown);border:1px solid var(--panel-line)}
+.legend .stale{color:var(--mixed);font-weight:600}
+.legend .src{margin-left:auto;color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
+.legend .src:hover{color:var(--ink)}
+.legend .osm{color:var(--ink-2);font-size:11px;text-decoration:none}
+.legend .osm:hover{text-decoration:underline}
+/* info card */
+.card{position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:76px;width:300px;max-width:calc(100% - 24px);padding:14px 16px;display:flex;flex-direction:column;gap:8px;z-index:4}
+.card .addr{font-weight:600;font-size:15px;padding-right:24px}
+.card .meta{font-size:12px;color:var(--ink-2)}
+.card .state{display:flex;align-items:center;gap:8px;font-weight:600}
+.card .big{font-family:var(--f-display);font-size:22px}
+.card .x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:8px;border:0;background:none;color:var(--ink-2);font-size:18px;cursor:pointer}
+.card .x:hover{background:var(--off-soft)}
+.bar{position:relative;height:16px;border-radius:5px;background:var(--on-soft);overflow:hidden}
+.bar span{position:absolute;top:0;bottom:0;background:var(--off)}
+.bar .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--sel)}
+.bar-axis{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10px;color:var(--ink-2)}
+.card ul{margin:0;padding:0 0 0 16px;font-size:13px;font-family:var(--f-mono)}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:var(--off-soft);color:var(--ink-2)}
+.badge.exact{background:var(--on-soft);color:var(--on)}
+/* editor */
+.sheet{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 55%,transparent);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+.sheet .panel{width:520px;max-width:100%;max-height:100%;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}
+.sheet h2{font-family:var(--f-display);font-size:17px;margin:0}
+.sheet p{margin:0;font-size:13px;color:var(--ink-2);line-height:1.5}
+.sheet textarea{font-family:var(--f-mono);font-size:13px;line-height:1.6;min-height:260px;resize:vertical;border-radius:10px;border:1px solid var(--panel-line);background:var(--bg);color:var(--ink);padding:10px;box-sizing:border-box;width:100%}
+.sheet label{font-size:13px;font-weight:600;display:flex;flex-direction:column;gap:6px}
+.sheet input[type=date]{font:inherit;padding:8px;border-radius:9px;border:1px solid var(--panel-line);background:var(--bg);color:var(--ink);width:max-content}
+.sheet .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.sheet .err{color:#c53b2c;font-size:13px;min-height:1em}
+.zoom{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:12px;display:flex;flex-direction:column;gap:6px}
+.zoom .btn{width:40px;height:40px;padding:0;font-size:18px;display:grid;place-items:center}
+.loading{position:absolute;inset:0;display:grid;place-items:center;font-size:14px;color:var(--ink-2);pointer-events:none}
+@media (max-width:760px){
+  .chips{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .card{top:auto;bottom:12px;right:max(12px,env(safe-area-inset-right,0px));left:max(12px,env(safe-area-inset-left,0px));width:auto;max-height:55%;overflow:auto}
+  .brand .sub .long{display:none}
+  .tools{margin-left:0}
+  .zoom{display:none}
+}
+@media (min-width:761px){.bottom{right:68px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<template id="shell">
+<div id="app">
+  <canvas id="map" aria-label="Мапа Черкас із зонами світла"></canvas>
+  <div class="loading" id="loading">Малюю мапу…</div>
+  <div class="top">
+    <div class="panel brand">
+      <div class="bulb" aria-hidden="true"></div>
+      <div>
+        <h1>Світло в Черкасах</h1>
+        <div class="sub"><span class="clock" id="clock">--:--</span> · <span id="dateLbl"></span><span class="long"> · підчерги 1.1–6.1</span></div>
+      </div>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Знайти адресу, напр. Гоголя 261" autocomplete="off" aria-label="Пошук адреси">
+      <div class="panel results" id="results" hidden></div>
+    </div>
+    <div class="tools">
+      <button class="btn" id="editBtn" hidden>Оновити графік</button>
+    </div>
+  </div>
+  <div class="panel card" id="card" hidden></div>
+  <div class="bottom">
+    <div class="panel board">
+      <div class="board-head">
+        <span class="t">Підчерги Черкас</span>
+        <div class="seg" role="group" aria-label="Вигляд мапи"><button type="button" id="mZones">Зони</button><button type="button" id="mBld">Будинки</button></div>
+        <div class="seg" id="days" role="group" aria-label="День графіка"></div>
+        <span class="when" id="whenLbl"></span>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="scrub">
+        <input type="range" id="t" min="0" max="1439" step="15" aria-label="Час доби">
+        <span class="tm" id="tm">--:--</span>
+        <button class="btn" id="nowBtn">Зараз</button>
+      </div>
+      <div class="legend">
+        <span><i class="l-on"></i>є світло</span>
+        <span><i class="l-off"></i>відключення</span>
+        <span><i class="l-unk"></i>немає даних</span>
+        <span id="staleNote"></span>
+        <a id="srcLink" class="src" target="_blank" rel="noopener" hidden></a>
+        <a class="osm" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>
+      </div>
+    </div>
+  </div>
+  <div class="zoom">
+    <button class="btn" id="zin" aria-label="Наблизити">+</button>
+    <button class="btn" id="zout" aria-label="Віддалити">−</button>
+    <button class="btn" id="zfit" aria-label="Усе місто">⤢</button>
+  </div>
+  <div class="sheet" id="sheet" hidden>
+    <div class="panel" role="dialog" aria-labelledby="edT">
+      <h2 id="edT">Оновити графік</h2>
+      <p>Графік оновлюється сам з каналу Черкасиобленерго приблизно раз на годину. Тут можна виправити його вручну: кожна підчерга з нового рядка, як у каналі: <span class="clock">2.1 12:30 - 14:00, 16:00 - 18:00</span>. Час у рядку — коли світла немає. Новий графік побачать усі.</p>
+      <label>Дата графіка<input type="date" id="edDate"></label>
+      <label>Графік<textarea id="edText" spellcheck="false"></textarea></label>
+      <div class="err" id="edErr"></div>
+      <div class="row">
+        <button class="btn" id="edCancel">Скасувати</button>
+        <button class="btn primary" id="edSave">Зберегти для всіх</button>
+      </div>
+    </div>
+  </div>
+</div>
+</template>
+<div id="root"></div>
+<script type="application/json" id="schedule">{"days": {"2026-10-21": {"text": "1.1 10:00 - 12:00, 16:00 - 18:00\n1.2 10:00 - 12:00, 16:00 - 18:00\n2.1 12:30 - 14:00, 16:00 - 18:00, 22:00 - 24:00\n2.2 16:00 - 18:00, 22:00 - 24:00\n3.1 14:00 - 16:00, 20:00 - 22:00\n3.2 14:00 - 16:00, 20:00 - 22:00\n4.1 12:00 - 14:00, 18:00 - 20:00\n4.2 14:00 - 16:00, 18:00 - 20:00\n5.1 14:00 - 16:00, 20:00 - 22:00\n5.2 10:00 - 12:00, 18:00 - 20:00\n6.1 12:00 - 14:00, 18:00 - 20:00\n6.2 12:00 - 14:00, 20:00 - 22:00", "post": 1877, "at": "2026-10-21T08:41:11Z"}, "2026-10-22": {"text": "1.1 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n1.2 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n2.1 12:00 - 14:00, 18:00 - 20:00\n2.2 12:00 - 14:00, 18:00 - 20:00\n3.1 10:00 - 12:00, 16:00 - 18:00\n3.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n4.1 10:00 - 12:00, 16:00 - 18:00\n4.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n5.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n5.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00", "post": 1880, "at": "2026-10-21T16:23:59Z"}}, "checked": "2026-10-21T17:05:00Z", "lastPost": 1880}</script>
+<script id="appjs">
+(async function(){
+"use strict";
+const root=document.getElementById('root');
+root.appendChild(document.getElementById('shell').content.cloneNode(true));
+const $=id=>document.getElementById(id);
+let STORE; try{ STORE=JSON.parse($('schedule').textContent); }catch(e){ STORE={days:{}}; }
+if(!STORE.days) STORE={days:{}};
+const QS=['1.1','2.1','3.1','4.1','5.1','6.1'];
+const KX=0.6505;
+
+/* ---------- schedule ---------- */
+function parseSchedule(text){
+  const out={}; const errs=[];
+  text.split(/\n+/).forEach((line,i)=>{
+    line=line.trim(); if(!line) return;
+    const m=line.match(/^(\d)\s*[.,]\s*(\d)\s*[:\-–—]?\s*(.*)$/);
+    if(!m){errs.push('Рядок '+(i+1)+': не бачу номер підчерги'); return;}
+    const key=m[1]+'.'+m[2]; const iv=[];
+    const rest=m[3].trim();
+    if(rest && !/^(без відключень|—|-)$/i.test(rest)){
+      const re=/(\d{1,2})[:.](\d{2})\s*[-–—]\s*(\d{1,2})[:.](\d{2})/g; let r, any=false;
+      while((r=re.exec(rest))){any=true; const a=+r[1]*60+ +r[2], b=+r[3]*60+ +r[4]; if(b>a) iv.push([a,b]); else iv.push([a,1440]);}
+      if(!any) errs.push('Рядок '+(i+1)+': не бачу проміжків часу');
+    }
+    out[key]=iv;
+  });
+  return {map:out,errs};
+}
+let SCH={}, day=null;
+const dayKeys=()=>Object.keys(STORE.days).sort();
+function pickDay(){ const t=kyivNow().date; if(STORE.days[t]) return t; const ks=dayKeys(); const past=ks.filter(k=>k<=t); return past.length?past[past.length-1]:(ks[0]||null); }
+function setDay(k){ day=k; SCH=k?parseSchedule(STORE.days[k].text).map:{}; }
+function isOff(q,m){const iv=SCH[q]; if(!iv) return null; return iv.some(([a,b])=>m>=a&&m<b);}
+function nextChange(q,m){const iv=SCH[q]; if(!iv) return null; const pts=[]; iv.forEach(([a,b])=>{pts.push(a,b)}); const f=pts.filter(x=>x>m).sort((a,b)=>a-b); return f.length?f[0]:null;}
+const hm=m=>m>=1440?'24:00':String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+
+/* ---------- Kyiv time ---------- */
+function kyivNow(){
+  const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Kyiv',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+  const g=t=>p.find(x=>x.type===t).value;
+  return {date:g('year')+'-'+g('month')+'-'+g('day'),min:+g('hour')*60+ +g('minute')};
+}
+const MONTHS=['січня','лютого','березня','квітня','травня','червня','липня','серпня','вересня','жовтня','листопада','грудня'];
+const dateUa=s=>{const [y,m,d]=s.split('-');return (+d)+' '+MONTHS[+m-1];};
+let live=true, T=kyivNow().min;
+
+/* ---------- data decode ---------- */
+let D;
+try{ const r=await fetch('mapdata.json'); if(!r.ok) throw 0; D=await r.json(); }catch(e){ $('loading').textContent='Не вдалося завантажити мапу. Онови сторінку.'; return; }
+const B=D.b, N=B.n.length;
+const bx0=new Float32Array(N),by0=new Float32Array(N),bx1=new Float32Array(N),by1=new Float32Array(N);
+const bOff=new Uint32Array(N+1); const P=new Float32Array(B.xy.length);
+{let k=0; for(let i=0;i<N;i++){ bOff[i]=k; let x=0,y=0,mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(let j=0;j<B.n[i];j++){ x+=B.xy[k]; y+=B.xy[k+1]; const wx=x*KX, wy=-y; P[k]=wx; P[k+1]=wy; k+=2;
+    if(wx<mnx)mnx=wx; if(wx>mxx)mxx=wx; if(wy<mny)mny=wy; if(wy>mxy)mxy=wy; }
+  bx0[i]=mnx;by0[i]=mny;bx1[i]=mxx;by1[i]=mxy; } bOff[N]=k; }
+const masks=[...new Set(B.q)];
+// buildings grouped into map cells, so a redraw only touches what is on screen;
+// small sheds/garages go into a separate "minor" layer that is skipped when zoomed out
+const CELL=1500, cells=new Map();
+for(let i=0;i<N;i++){ const cxk=Math.floor((bx0[i]+bx1[i])/2/CELL), cyk=Math.floor((by0[i]+by1[i])/2/CELL), key=cxk*100000+cyk;
+  let cell=cells.get(key); if(!cell){ cell={x0:1e9,y0:1e9,x1:-1e9,y1:-1e9,maj:new Map(),min:new Map()}; cells.set(key,cell); }
+  if(bx0[i]<cell.x0)cell.x0=bx0[i]; if(by0[i]<cell.y0)cell.y0=by0[i]; if(bx1[i]>cell.x1)cell.x1=bx1[i]; if(by1[i]>cell.y1)cell.y1=by1[i];
+  const big=Math.max(bx1[i]-bx0[i],by1[i]-by0[i])>=14; const layer=big?cell.maj:cell.min;
+  let p=layer.get(B.q[i]); if(!p){ p=new Path2D(); layer.set(B.q[i],p); }
+  const s=bOff[i], e=bOff[i+1]; p.moveTo(P[s],P[s+1]); for(let k=s+2;k<e;k+=2) p.lineTo(P[k],P[k+1]); p.closePath(); }
+const cellList=[...cells.values()];
+// zones: run-length encoded grid of 16 m cells, each holding an index into Z.masks
+let Z=null, ZL=null;
+try{ const zr=await fetch('zones.json'); if(!zr.ok) throw 0; Z=await zr.json(); ZL=new Uint8Array(Z.nx*Z.ny); let o=0; for(let k=0;k<Z.rle.length;k+=2){ ZL.fill(Z.rle[k],o,o+Z.rle[k+1]); o+=Z.rle[k+1]; } }catch(e){ Z=null; }
+const zoneC=document.createElement('canvas'); let zoneKey='';
+function hexRgb(h){ h=(h||'').trim(); if(h[0]==='#'){ if(h.length===4) h='#'+h[1]+h[1]+h[2]+h[2]+h[3]+h[3]; const n=parseInt(h.slice(1,7),16); return [n>>16&255,n>>8&255,n&255]; } const m=h.match(/\d+/g); return m?[+m[0],+m[1],+m[2]]:[128,128,128]; }
+function buildZones(){
+  if(!Z) return;
+  const states=Z.masks.map(m=>maskState(m));
+  const key=states.join(',')+'|'+focusQ+'|'+C['--on']+C['--off-zone'];
+  if(key===zoneKey) return; zoneKey=key;
+  if(zoneC.width!==Z.nx){ zoneC.width=Z.nx; zoneC.height=Z.ny; }
+  const zc=zoneC.getContext('2d'); const img=zc.createImageData(Z.nx,Z.ny); const d=img.data;
+  const on=hexRgb(C['--on']), off=hexRgb(C['--off-zone']);
+  const col=Z.masks.map((m,i)=>{ if(!i) return [0,0,0,0]; const s=states[i]; const faded=focusQ!==null&&!(m&(1<<focusQ));
+    if(s==='on') return [on[0],on[1],on[2],faded?40:150]; if(s==='off') return [off[0],off[1],off[2],faded?40:165]; return [0,0,0,0]; });
+  for(let i=0,j=0;i<ZL.length;i++,j+=4){ const cc=col[ZL[i]]; d[j]=cc[0]; d[j+1]=cc[1]; d[j+2]=cc[2]; d[j+3]=cc[3]; }
+  zc.putImageData(img,0,0);
+}
+function zoneAt(wx,wy){ if(!Z) return 0; const ix=Math.floor((wx-Z.x0)/Z.cell), iy=Math.floor((wy-Z.y0)/Z.cell); if(ix<0||iy<0||ix>=Z.nx||iy>=Z.ny) return 0; return Z.masks[ZL[iy*Z.nx+ix]]; }
+let mode='zones'; try{ const m=localStorage.getItem('svitlo-mode'); if(m==='zones'||m==='buildings') mode=m; }catch(e){}
+if(!Z) mode='buildings';
+let selPt=null, selMask=0;
+function polyPath(flat,close){ const p=new Path2D(); let x=0,y=0; for(let k=0;k<flat.length;k+=2){x+=flat[k];y+=flat[k+1]; const wx=x*KX,wy=-y; if(k===0)p.moveTo(wx,wy); else p.lineTo(wx,wy);} if(close)p.closePath(); return p; }
+const waterP=new Path2D(), holesP=new Path2D(), parkP=new Path2D(), woodP=new Path2D();
+D.res.forEach((r,i)=>{(i===0?waterP:holesP).addPath(polyPath(r,true));});
+D.ar.forEach(([k,f])=>{(k===0?waterP:(k===1?parkP:woodP)).addPath(polyPath(f,true));});
+const roadP=[new Path2D(),new Path2D(),new Path2D(),new Path2D(),new Path2D()];
+const labels=[];
+D.r.forEach(([c,ni,f])=>{ roadP[c].addPath(polyPath(f,false));
+  if(ni>=0 && c<=2){ let x=0,y=0,px=null,py=null,best=0,bl=null;
+    for(let k=0;k<f.length;k+=2){x+=f[k];y+=f[k+1]; const wx=x*KX,wy=-y; if(px!==null){const L=Math.hypot(wx-px,wy-py); if(L>best){best=L;bl=[px,py,wx,wy];}} px=wx;py=wy;}
+    if(bl) labels.push({c,name:D.rn[ni],x:(bl[0]+bl[2])/2,y:(bl[1]+bl[3])/2,a:Math.atan2(bl[3]-bl[1],bl[2]-bl[0]),L:best}); }});
+// keep best label per name+class
+{const m=new Map(); labels.forEach(l=>{const k=l.name; if(!m.has(k)||m.get(k).L<l.L) m.set(k,l);}); labels.length=0; m.forEach(v=>labels.push(v)); labels.sort((a,b)=>a.c-b.c||b.L-a.L);}
+const cityP=polyPath(D.city,true);
+// city bounds
+let cx0=1e9,cy0=1e9,cx1=-1e9,cy1=-1e9;{let x=0,y=0;for(let k=0;k<D.city.length;k+=2){x+=D.city[k];y+=D.city[k+1];const wx=x*KX,wy=-y;cx0=Math.min(cx0,wx);cx1=Math.max(cx1,wx);cy0=Math.min(cy0,wy);cy1=Math.max(cy1,wy);}}
+// spatial grid for hit-tests
+const G=250, grid=new Map();
+for(let i=0;i<N;i++){ for(let gx=Math.floor(bx0[i]/G);gx<=Math.floor(bx1[i]/G);gx++) for(let gy=Math.floor(by0[i]/G);gy<=Math.floor(by1[i]/G);gy++){const k=gx+','+gy; let a=grid.get(k); if(!a)grid.set(k,a=[]); a.push(i);} }
+function hit(wx,wy){ const a=grid.get(Math.floor(wx/G)+','+Math.floor(wy/G))||[]; let best=-1, bd=1e9;
+  for(const i of a){ if(wx<bx0[i]-3||wx>bx1[i]+3||wy<by0[i]-3||wy>by1[i]+3) continue; const s=bOff[i],e=bOff[i+1]; let c=false;
+    for(let k=s,j=e-2;k<e;j=k,k+=2){const xi=P[k],yi=P[k+1],xj=P[j],yj=P[j+1]; if((yi>wy)!==(yj>wy)&&wx<(xj-xi)*(wy-yi)/(yj-yi)+xi)c=!c;}
+    if(c) return i; const d=Math.hypot(wx-(bx0[i]+bx1[i])/2,wy-(by0[i]+by1[i])/2); if(d<bd&&d<12){bd=d;best=i;} }
+  return best; }
+
+/* ---------- view ---------- */
+const cv=$('map'), ctx=cv.getContext('2d');
+let W=0,H=0,dpr=1, vx=0,vy=0,sc=0.2;
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+let C={};
+function readColors(){['--land','--water','--park','--road','--road-edge','--rail','--on','--on-glow','--off','--off-zone','--unknown','--sel','--label','--label-halo','--mixed'].forEach(n=>C[n]=css(n));}
+readColors();
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{readColors();draw(true);});}catch(e){}
+new MutationObserver(()=>{readColors();draw(true);}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+function fit(){ const pad=Math.min(W,H)<600?20:60; const top=70, bottom=Math.min(260,H*0.42);
+  const s=Math.min((W-pad*2)/(cx1-cx0),(H-top-bottom)/(cy1-cy0)); sc=s; vx=(cx0+cx1)/2; vy=(cy0+cy1)/2 + (bottom-top)/2/s; }
+function resize(){ dpr=Math.min(window.devicePixelRatio||1,2); const r=cv.getBoundingClientRect(); W=r.width;H=r.height; cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); if(!sc||sc===0.2) fit(); draw(true); }
+let selected=-1, focusQ=null, interacting=false, raf=0, wantFull=true;
+// The full map is drawn into an off-screen picture with a margin around the screen.
+// Dragging and zooming only move/scale that picture; a real redraw happens once movement stops.
+const cache=document.createElement('canvas'), cctx=cache.getContext('2d');
+const glowA=document.createElement('canvas'), gA=glowA.getContext('2d');
+const glowB=document.createElement('canvas'), gB=glowB.getContext('2d');
+const MARGIN=0.3; let cv0=null, CW=0, CH=0;
+function draw(full){ wantFull=wantFull||!!full; if(raf) return; raf=requestAnimationFrame(()=>{raf=0;
+  if((wantFull&&!interacting)||!cv0){ render(); wantFull=false; } blit(); }); }
+function blit(){
+  const c=ctx; c.setTransform(1,0,0,1,0,0); c.fillStyle=C['--land']; c.fillRect(0,0,cv.width,cv.height);
+  if(!cv0) return; const k=sc/cv0.sc;
+  c.imageSmoothingEnabled=true;
+  c.setTransform(k,0,0,k,(W/2+(cv0.vx-vx)*sc-k*CW/2)*dpr,(H/2+(cv0.vy-vy)*sc-k*CH/2)*dpr);
+  c.drawImage(cache,0,0);
+  c.setTransform(1,0,0,1,0,0);
+}
+function maskState(m){ if(!m) return 'unk'; let off=false, known=false; for(let b=0;b<6;b++) if(m&(1<<b)){ const s=isOff(QS[b],T); if(s===null) continue; known=true; if(s) off=true; } return known?(off?'off':'on'):'unk'; }
+function render(){
+  CW=Math.ceil(W*(1+2*MARGIN)); CH=Math.ceil(H*(1+2*MARGIN));
+  const pw=Math.round(CW*dpr), ph=Math.round(CH*dpr);
+  if(cache.width!==pw||cache.height!==ph){ cache.width=pw; cache.height=ph; }
+  const c=cctx; c.setTransform(1,0,0,1,0,0); c.globalAlpha=1; c.fillStyle=C['--land']; c.fillRect(0,0,pw,ph);
+  const tx=(CW/2-vx*sc)*dpr, ty=(CH/2-vy*sc)*dpr;
+  c.setTransform(sc*dpr,0,0,sc*dpr,tx,ty);
+  // visible world rectangle of the picture
+  const wx0=vx-CW/2/sc, wx1=vx+CW/2/sc, wy0=vy-CH/2/sc, wy1=vy+CH/2/sc;
+  const vis=cellList.filter(q=>q.x1>=wx0&&q.x0<=wx1&&q.y1>=wy0&&q.y0<=wy1);
+  const showMinor=sc>=0.35;
+  c.fillStyle=C['--park']; c.fill(woodP); c.fill(parkP);
+  c.fillStyle=C['--water']; c.fill(waterP); c.fillStyle=C['--land']; c.fill(holesP); c.fillStyle=C['--water'];
+  const st={}; masks.forEach(m=>st[m]=maskState(m));
+  const dim=m=>focusQ!==null && !(m & (1<<focusQ));
+  const RW=[16,11,6,3]; const minPx=[2.2,1.6,0.8,0.5];
+  function roads(alpha){ c.globalAlpha=alpha; c.lineCap='round'; c.lineJoin='round';
+    for(let k=3;k>=0;k--){ if(k===3&&sc<0.6) continue; if(k===2&&sc<0.12) continue; c.strokeStyle=C['--road']; c.lineWidth=Math.max(RW[k],minPx[k]/sc); c.stroke(roadP[k]); }
+    c.strokeStyle=C['--rail']; c.lineWidth=Math.max(2,0.8/sc); c.setLineDash([8/sc>6?8/sc:6,6]); c.stroke(roadP[4]); c.setLineDash([]);
+    c.strokeStyle=C['--rail']; c.globalAlpha=.6*alpha; c.lineWidth=1.2/sc; c.setLineDash([4/sc,4/sc]); c.stroke(cityP); c.setLineDash([]); c.globalAlpha=1; }
+  if(mode==='zones'){
+    // continuous areas: one coloured pixel per 16 m cell, stretched smoothly over the map
+    buildZones(); c.save(); c.imageSmoothingEnabled=true; c.globalAlpha=1;
+    c.drawImage(zoneC,Z.x0,Z.y0,Z.nx*Z.cell,Z.ny*Z.cell); c.restore();
+    // buildings as quiet texture on top of the zones
+    c.fillStyle=C['--ink']; c.globalAlpha=0.12;
+    for(const cell of vis){ cell.maj.forEach(p=>c.fill(p)); if(showMinor) cell.min.forEach(p=>c.fill(p)); }
+    c.globalAlpha=1;
+    roads(0.85);
+  } else {
+    roads(1);
+    // glow for lit zones: drawn small, blurred small, then stretched — cheap soft halo
+    { const GS=4, gw=Math.max(1,Math.round(pw/GS)), gh=Math.max(1,Math.round(ph/GS));
+      if(glowA.width!==gw||glowA.height!==gh){ glowA.width=gw; glowA.height=gh; glowB.width=gw; glowB.height=gh; }
+      gA.setTransform(1,0,0,1,0,0); gA.clearRect(0,0,gw,gh);
+      gA.setTransform(sc*dpr/GS,0,0,sc*dpr/GS,tx/GS,ty/GS); gA.fillStyle=C['--on'];
+      let any=false;
+      for(const cell of vis){ cell.maj.forEach((p,m)=>{ if(st[m]==='on'&&!dim(m)){ gA.fill(p); any=true; } }); }
+      if(any){
+        gB.setTransform(1,0,0,1,0,0); gB.clearRect(0,0,gw,gh);
+        if('filter' in gB){ gB.filter='blur('+Math.max(1.5,Math.min(4,sc*6))+'px)'; gB.drawImage(glowA,0,0); gB.filter='none'; }
+        else gB.drawImage(glowA,0,0);
+        c.save(); c.setTransform(1,0,0,1,0,0); c.imageSmoothingEnabled=true; c.globalAlpha=0.55; c.drawImage(glowB,0,0,pw,ph); c.restore();
+      }
+    }
+    for(const cell of vis){
+      for(const layer of showMinor?[cell.maj,cell.min]:[cell.maj]){
+        layer.forEach((p,m)=>{ const s=st[m]; c.fillStyle=s==='on'?C['--on']:(s==='off'?C['--off']:C['--unknown']); c.globalAlpha=dim(m)?0.18:1; c.fill(p); });
+      }
+    }
+    c.globalAlpha=1;
+  }
+  if(selected>=0){ const p=new Path2D(); const s=bOff[selected],e=bOff[selected+1]; p.moveTo(P[s],P[s+1]); for(let k=s+2;k<e;k+=2)p.lineTo(P[k],P[k+1]); p.closePath();
+    c.strokeStyle=C['--sel']; c.lineWidth=Math.max(2.5/sc,3); c.stroke(p); }
+  if(selected===-2&&selPt){ c.beginPath(); c.arc(selPt[0],selPt[1],Math.max(6/sc,5),0,Math.PI*2); c.fillStyle=C['--sel']; c.fill(); c.lineWidth=Math.max(2/sc,2); c.strokeStyle=C['--land']; c.stroke(); }
+  drawLabels();
+  cv0={vx,vy,sc};
+}
+function drawLabels(){
+  const c=cctx; c.setTransform(dpr,0,0,dpr,0,0); const boxes=[]; const W=CW, H=CH;
+  const fs=sc>1.2?13:12; c.font='500 '+fs+'px "Golos Text",system-ui,sans-serif'; c.textAlign='center'; c.textBaseline='middle';
+  let n=0;
+  for(const l of labels){ if(l.c===2&&sc<0.5) continue; if(l.c===1&&sc<0.18) continue;
+    const sx=(l.x-vx)*sc+W/2, sy=(l.y-vy)*sc+H/2; if(sx<-50||sy<-20||sx>W+50||sy>H+20) continue;
+    const txt=l.name.replace(/^вулиця |^бульвар |^проспект /,'').replace(/ вулиця$/,''); const tw=c.measureText(txt).width; if(l.L*sc<tw+16) continue;
+    const r=Math.max(tw,fs)/2+4; if(boxes.some(b=>Math.hypot(b[0]-sx,b[1]-sy)<b[2]+r)) continue; boxes.push([sx,sy,r]);
+    let a=l.a; if(a>Math.PI/2)a-=Math.PI; if(a<-Math.PI/2)a+=Math.PI;
+    c.save(); c.translate(sx,sy); c.rotate(a); c.lineWidth=3; c.strokeStyle=C['--label-halo']; c.strokeText(txt,0,0); c.fillStyle=C['--label']; c.fillText(txt,0,0); c.restore();
+    if(++n>140) break; }
+}
+/* ---------- interaction ---------- */
+const ptrs=new Map(); let last=null, moved=0, endT=0;
+function toWorld(sx,sy){return [(sx-W/2)/sc+vx,(sy-H/2)/sc+vy];}
+function zoomAt(sx,sy,f){ const [wx,wy]=toWorld(sx,sy); sc=Math.min(6,Math.max(0.05,sc*f)); vx=wx-(sx-W/2)/sc; vy=wy-(sy-H/2)/sc; }
+function startInteract(){ interacting=true; clearTimeout(endT); }
+function endInteract(){ clearTimeout(endT); endT=setTimeout(()=>{interacting=false; draw(true);},140); }
+cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,[e.offsetX,e.offsetY]); moved=0; last=null; cv.classList.add('drag'); });
+cv.addEventListener('pointermove',e=>{ if(!ptrs.has(e.pointerId)) return; const prev=ptrs.get(e.pointerId); const cur=[e.offsetX,e.offsetY];
+  if(ptrs.size===1){ const dx=cur[0]-prev[0],dy=cur[1]-prev[1]; moved+=Math.abs(dx)+Math.abs(dy); if(moved>3){startInteract(); vx-=dx/sc; vy-=dy/sc; draw();} }
+  else if(ptrs.size===2){ const o=[...ptrs.entries()].find(([k])=>k!==e.pointerId)[1]; const d0=Math.hypot(prev[0]-o[0],prev[1]-o[1]), d1=Math.hypot(cur[0]-o[0],cur[1]-o[1]);
+    startInteract(); moved+=10; const mx=(cur[0]+o[0])/2,my=(cur[1]+o[1])/2, pmx=(prev[0]+o[0])/2,pmy=(prev[1]+o[1])/2; vx-=(mx-pmx)/sc; vy-=(my-pmy)/sc; if(d0>0) zoomAt(mx,my,d1/d0); draw(); }
+  ptrs.set(e.pointerId,cur); });
+function up(e){ if(!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); cv.classList.remove('drag');
+  if(moved<=3 && e.type==='pointerup'){ const [wx,wy]=toWorld(e.offsetX,e.offsetY); const i=hit(wx,wy); if(i<0&&mode==='zones'){ const m=zoneAt(wx,wy); if(m){ selPt=[wx,wy]; selMask=m; select(-2); return endInteract(); } } select(i); }
+  endInteract(); }
+cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+cv.addEventListener('wheel',e=>{ e.preventDefault(); startInteract(); zoomAt(e.offsetX,e.offsetY,Math.exp(-e.deltaY*(e.deltaMode?0.05:0.0016))); draw(); endInteract(); },{passive:false});
+$('zin').onclick=()=>{zoomAt(W/2,H/2,1.6);draw(true);};
+$('zout').onclick=()=>{zoomAt(W/2,H/2,1/1.6);draw(true);};
+$('zfit').onclick=()=>{fit();draw(true);};
+window.addEventListener('resize',resize);
+
+/* ---------- board ---------- */
+const chips=$('chips');
+QS.forEach((q,i)=>{ const b=document.createElement('button'); b.className='chip'; b.id='chip'+i; b.setAttribute('aria-pressed','false');
+  b.innerHTML='<span class="n"><span class="dot"></span>'+q+'</span><span class="s"></span><span class="nx"></span>';
+  b.onclick=()=>{ focusQ=focusQ===i?null:i; QS.forEach((_,j)=>$('chip'+j).setAttribute('aria-pressed',String(focusQ===j))); draw(true); };
+  chips.appendChild(b); });
+function updateBoard(){
+  const now=kyivNow(); $('clock').textContent=hm(now.min);
+  const isToday=day===now.date;
+  if(live&&isToday){ T=now.min; $('t').value=String(T); }
+  $('tm').textContent=hm(T);
+  const dl=!day?'':(isToday?'Сьогодні':(day>now.date?'Завтра':dateUa(day)));
+  $('whenLbl').innerHTML=(live&&isToday)?'Зараз, <b>'+hm(T)+'</b>':dl+', <b>'+hm(T)+'</b>';
+  $('nowBtn').hidden=live&&isToday;
+  $('dateLbl').textContent=day?'графік на '+dateUa(day):'графіка ще немає';
+  $('staleNote').innerHTML = !STORE.days[now.date] ? '<span class="stale">Графіка на сьогодні ще немає'+(day?', показано за '+dateUa(day):'')+'</span>' : '';
+  // day tabs: today and the next day if published
+  const tabs=dayKeys().filter(k=>k>=now.date).slice(0,2); const box=$('days');
+  const sig=tabs.join(',')+'|'+day; if(box.dataset.sig!==sig){ box.dataset.sig=sig; box.innerHTML='';
+    if(tabs.length>1||(tabs.length===1&&tabs[0]!==now.date)) tabs.forEach(k=>{ const b=document.createElement('button'); b.type='button';
+      b.textContent=k===now.date?'Сьогодні':(k===tabs[1]||k>now.date?'Завтра, '+dateUa(k):dateUa(k)); b.setAttribute('aria-pressed',String(k===day));
+      b.onclick=()=>{ setDay(k); if(k!==now.date) live=false; else live=true; updateBoard(); draw(true); }; box.appendChild(b); }); }
+  box.hidden=!box.children.length;
+  const src=day&&STORE.days[day]; const a=$('srcLink');
+  if(src&&src.post){ a.href='https://t.me/pat_cherkasyoblenergo/'+src.post; a.textContent='Джерело: Черкасиобленерго'+(src.at?', '+new Intl.DateTimeFormat('uk-UA',{timeZone:'Europe/Kyiv',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'}).format(new Date(src.at)):''); a.hidden=false; }
+  else if(src){ a.removeAttribute('href'); a.textContent='Графік внесено вручну'; a.hidden=false; } else a.hidden=true;
+  QS.forEach((q,i)=>{ const el=$('chip'+i); const off=isOff(q,T); const nx=nextChange(q,T);
+    el.classList.toggle('on',off===false); el.classList.toggle('off',off===true);
+    el.querySelector('.s').textContent= off===null?'немає даних':(off?'відключення':'є світло');
+    el.querySelector('.nx').textContent= nx===null?(off?'до 24:00':'до кінця доби'):'до '+hm(nx); });
+  if(selected!==-1) renderCard();
+}
+$('t').addEventListener('input',e=>{ live=false; T=+e.target.value; updateBoard(); draw(true); });
+$('nowBtn').onclick=()=>{ live=true; const t=kyivNow().date; if(STORE.days[t]&&day!==t) setDay(t); updateBoard(); draw(true); };
+setInterval(()=>{ const before=T, bd=day; const t=kyivNow().date; if(live&&day!==t&&STORE.days[t]) setDay(t); updateBoard(); if(T!==before||day!==bd) draw(true); },20000);
+
+/* ---------- card ---------- */
+function select(i){ selected=i; $('card').hidden=(i===-1); if(i!==-1) renderCard(); draw(true); }
+function renderCard(){
+  const i=selected, zone=i===-2, m=zone?selMask:B.q[i], exact=zone?false:B.e[i]==='1', addr=zone?'Ділянка на мапі':B.a[i];
+  const qs=QS.filter((_,b)=>m&(1<<b)); const card=$('card'); card.innerHTML='';
+  const x=document.createElement('button'); x.className='x'; x.setAttribute('aria-label','Закрити'); x.textContent='×'; x.onclick=()=>select(-1); card.appendChild(x);
+  const a=document.createElement('div'); a.className='addr'; a.textContent=addr||'Будинок без підписаної адреси'; card.appendChild(a);
+  if(!qs.length){ const p=document.createElement('div'); p.className='meta'; p.textContent='Для цього будинку немає даних: поруч немає адрес зі списку обленерго. Перевір свою адресу на сайті Черкасиобленерго.'; card.appendChild(p); return; }
+  const st=maskState(m);
+  const s=document.createElement('div'); s.className='state';
+  s.innerHTML='<span class="big"></span>'; s.querySelector('.big').textContent=st==='on'?'Є світло':(st==='off'?'Відключення':'Немає даних');
+  s.querySelector('.big').style.color=st==='on'?'var(--on)':'var(--ink)'; card.appendChild(s);
+  const meta=document.createElement('div'); meta.className='meta';
+  const badge=document.createElement('span'); badge.className='badge'+(exact?' exact':''); badge.textContent=exact?'адреса є у списку':(zone?'приблизна межа зони':'приблизно, за сусідніми адресами');
+  meta.append('Підчерга '+qs.join(' і ')+' · '); meta.appendChild(badge); card.appendChild(meta);
+  qs.forEach(q=>{ const bar=document.createElement('div'); bar.className='bar'; bar.setAttribute('role','img');
+    const iv=SCH[q]||[]; bar.setAttribute('aria-label','Підчерга '+q+': відключення '+(iv.map(([a,b])=>hm(a)+'–'+hm(b)).join(', ')||'немає'));
+    iv.forEach(([a,b])=>{const sp=document.createElement('span'); sp.style.left=(a/1440*100)+'%'; sp.style.width=((b-a)/1440*100)+'%'; bar.appendChild(sp);});
+    const nw=document.createElement('i'); nw.className='now'; nw.style.left=(T/1440*100)+'%'; bar.appendChild(nw);
+    if(qs.length>1){const l=document.createElement('div'); l.className='meta'; l.textContent=q; card.appendChild(l);}
+    card.appendChild(bar); });
+  const ax=document.createElement('div'); ax.className='bar-axis'; ax.innerHTML='<span>00</span><span>06</span><span>12</span><span>18</span><span>24</span>'; card.appendChild(ax);
+  const ul=document.createElement('ul'); const all=[...new Set(qs.flatMap(q=>(SCH[q]||[]).map(([a,b])=>hm(a)+' – '+hm(b))))].sort();
+  if(all.length) all.forEach(t=>{const li=document.createElement('li'); li.textContent=t; ul.appendChild(li);}); else {const li=document.createElement('li'); li.textContent='без відключень'; ul.appendChild(li);}
+  const h=document.createElement('div'); h.className='meta'; h.textContent='Відключення за графіком на '+(day?dateUa(day):'—')+':'; card.appendChild(h); card.appendChild(ul);
+}
+
+/* ---------- search ---------- */
+const norm=s=>s.toLowerCase().replace(/[ʼ'’`]/g,'').replace(/вулиця|вул\.?|провулок|пров\.?|бульвар|бул\.?|проспект|просп\.?|узвіз/g,' ').replace(/[.,]/g,' ').replace(/\s+/g,' ').trim();
+const IDX=Object.entries(B.a).map(([i,s])=>[+i,s,norm(s)]);
+$('q').addEventListener('input',e=>{ const v=norm(e.target.value); const box=$('results');
+  if(v.length<2){ box.hidden=true; return; }
+  const parts=v.split(' '); const res=[];
+  for(const [i,s,n] of IDX){ if(parts.every(p=>(' '+n+' ').includes(' '+p)||n.includes(p))){ res.push([i,s,n]); if(res.length>60) break; } }
+  const num=parts.find(p=>/^\d/.test(p));
+  if(num) res.sort((a,b)=>((' '+b[2]+' ').includes(' '+num+' ')?1:0)-((' '+a[2]+' ').includes(' '+num+' ')?1:0));
+  box.innerHTML=''; box.hidden=false;
+  if(!res.length){ const d=document.createElement('div'); d.className='none'; d.textContent='Такої адреси немає на мапі. Спробуй іншу назву вулиці або сусідній будинок.'; box.appendChild(d); return; }
+  res.slice(0,8).forEach(([i,s])=>{ const b=document.createElement('button'); const t=document.createElement('span'); t.textContent=s; const q=document.createElement('span'); q.className='q';
+    const m=B.q[i]; q.textContent=m?QS.filter((_,k)=>m&(1<<k)).join(', '):'—'; b.append(t,q);
+    b.onclick=()=>{ box.hidden=true; $('q').value=s; vx=(bx0[i]+bx1[i])/2; vy=(by0[i]+by1[i])/2; sc=Math.max(sc,2); select(i); };
+    box.appendChild(b); }); });
+$('q').addEventListener('keydown',e=>{ if(e.key==='Escape'){$('results').hidden=true;} if(e.key==='Enter'){const b=$('results').querySelector('button'); if(b) b.click();} });
+document.addEventListener('pointerdown',e=>{ if(!e.target.closest('.search')) $('results').hidden=true; });
+
+/* ---------- schedule editor (owner/editors) ---------- */
+let art=null;
+(async()=>{ try{ if(!window.claude||!claude.use) return; const user=await claude.use('user'); art=await claude.use('artifact');
+  const can=user? await user.canEdit():false; if(can && art) $('editBtn').hidden=false; }catch(e){} })();
+$('editBtn').onclick=()=>{ const t=day||kyivNow().date; $('edDate').value=t; $('edText').value=(STORE.days[t]&&STORE.days[t].text)||''; $('edErr').textContent=''; $('sheet').hidden=false; $('edText').focus(); };
+$('edDate').addEventListener('change',e=>{ const d=STORE.days[e.target.value]; if(d) $('edText').value=d.text; });
+$('edCancel').onclick=()=>{ $('sheet').hidden=true; };
+$('edSave').onclick=async()=>{
+  const text=$('edText').value.trim(); const r=parseSchedule(text);
+  if(r.errs.length){ $('edErr').textContent=r.errs.slice(0,3).join('; '); return; }
+  const missing=QS.filter(q=>!(q in r.map)); if(missing.length){ $('edErr').textContent='Немає рядків для: '+missing.join(', '); return; }
+  if(!art){ $('edErr').textContent='Збереження доступне лише у переглядачі Claude.'; return; }
+  const btn=$('edSave'); btn.disabled=true; btn.textContent='Зберігаю…';
+  const date=$('edDate').value||kyivNow().date;
+  const next={days:Object.assign({},STORE.days),checked:STORE.checked||null};
+  next.days[date]={text,post:null,at:new Date().toISOString(),manual:true};
+  const keep=Object.keys(next.days).sort().slice(-5); Object.keys(next.days).forEach(k=>{ if(!keep.includes(k)) delete next.days[k]; });
+  try{ await art.publish({'schedule.json':{content:JSON.stringify(next),contentType:'application/json'}});
+    STORE=next; setDay(pickDay()===date?date:day||date); $('sheet').hidden=true; updateBoard(); draw(true); }
+  catch(e){ const c=e&&e.code; $('edErr').textContent = c==='conflict'?'Графік щойно оновився, сторінка перезавантажиться.' : (c==='not_writer'||c==='not_granted')?'У тебе немає прав змінювати цю сторінку.' : c==='rate_limited'?'Забагато збережень поспіль, спробуй за хвилину.' : c==='capability_disabled'?'У цьому перегляді зберігати не можна, відкрий сторінку в Claude.' : 'Не вдалося зберегти, спробуй ще раз.'; }
+  finally{ btn.disabled=false; btn.textContent='Зберегти для всіх'; }
+};
+// fresher copy of the schedule published next to the page
+async function loadSchedule(){ try{ const r=await fetch('schedule.json?ts='+Date.now(),{cache:'no-store'}); if(!r.ok) return; const j=await r.json(); if(!j||!j.days) return;
+  const changed=JSON.stringify(j.days)!==JSON.stringify(STORE.days); STORE=j; if(changed){ const keep=day; setDay(STORE.days[keep]&&keep!==kyivNow().date?keep:pickDay()); updateBoard(); draw(true); } }catch(e){} }
+setInterval(loadSchedule,5*60*1000);
+
+/* ---------- go ---------- */
+function setMode(m){ mode=m; try{localStorage.setItem('svitlo-mode',m);}catch(e){} $('mZones').setAttribute('aria-pressed',String(m==='zones')); $('mBld').setAttribute('aria-pressed',String(m==='buildings')); if(selected===-2&&m!=='zones') select(-1); draw(true); }
+$('mZones').onclick=()=>setMode('zones'); $('mBld').onclick=()=>setMode('buildings');
+if(!Z) $('mZones').disabled=true;
+$('mZones').setAttribute('aria-pressed',String(mode==='zones')); $('mBld').setAttribute('aria-pressed',String(mode==='buildings'));
+$('loading').hidden=true;
+setDay(pickDay()); updateBoard(); resize(); loadSchedule();
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>draw(true));
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,33 @@
+name: Оновлення графіка
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # кожні 10 хвилин (GitHub іноді запускає із затримкою)
+  workflow_dispatch:          # кнопка «Run workflow» для ручного запуску
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-schedule
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Прочитати канал Черкасиобленерго
+        run: python3 scripts/update_schedule.py
+      - name: Зберегти зміни
+        run: |
+          if git diff --quiet -- schedule.json; then
+            echo "Графік не змінився"
+            exit 0
+          fi
+          git config user.name "svitlo-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add schedule.json
+          git commit -m "Оновлено графік відключень"
+          git push
