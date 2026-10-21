@@ -139,6 +139,12 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hi
 .sheet .err{color:#c53b2c;font-size:13px;min-height:1em}
 .zoom{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:12px;display:flex;flex-direction:column;gap:6px}
 .zoom .btn{width:40px;height:40px;padding:0;font-size:18px;display:grid;place-items:center}
+.locate{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:150px;width:44px;height:44px;padding:0;display:grid;place-items:center;border-radius:50%;z-index:3}
+.locate[data-state="on"]{color:var(--sel);border-color:var(--sel)}
+.locate[data-state="wait"] svg{animation:locpulse 1s ease-in-out infinite}
+@keyframes locpulse{50%{opacity:.35}}
+.toast{position:absolute;left:50%;transform:translateX(-50%);top:120px;max-width:calc(100% - 32px);box-sizing:border-box;background:var(--ink);color:var(--panel);padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.4;box-shadow:var(--shadow);z-index:6;text-align:center}
+@media (prefers-reduced-motion:reduce){.locate[data-state="wait"] svg{animation:none}}
 .loading{position:absolute;inset:0;display:grid;place-items:center;font-size:14px;color:var(--ink-2);pointer-events:none}
 @media (max-width:760px){
   .fold{display:grid;margin-left:auto;order:2}
@@ -167,7 +173,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hi
   .tools{margin-left:0}
   .zoom{display:none}
 }
-@media (min-width:761px){.bottom{right:68px}}
+@media (min-width:761px){.bottom{right:68px}.locate{bottom:156px;width:40px;height:40px;border-radius:12px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 <template id="shell">
@@ -223,6 +229,10 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hi
     <button class="btn" id="zout" aria-label="Віддалити">−</button>
     <button class="btn" id="zfit" aria-label="Усе місто">⤢</button>
   </div>
+  <button class="btn locate" id="locate" type="button" aria-label="Показати, де я" title="Де я">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+  </button>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <div class="sheet" id="sheet" hidden>
     <div class="panel" role="dialog" aria-labelledby="edT">
       <h2 id="edT">Оновити графік</h2>
@@ -329,7 +339,7 @@ function buildZones(){
 function zoneAt(wx,wy){ if(!Z) return 0; const ix=Math.floor((wx-Z.x0)/Z.cell), iy=Math.floor((wy-Z.y0)/Z.cell); if(ix<0||iy<0||ix>=Z.nx||iy>=Z.ny) return 0; return Z.masks[ZL[iy*Z.nx+ix]]; }
 let mode='zones'; try{ const m=localStorage.getItem('svitlo-mode'); if(m==='zones'||m==='buildings') mode=m; }catch(e){}
 if(!Z) mode='buildings';
-let selPt=null, selMask=0;
+let selPt=null, selMask=0, selIsMe=false, me=null;
 function polyPath(flat,close){ const p=new Path2D(); let x=0,y=0; for(let k=0;k<flat.length;k+=2){x+=flat[k];y+=flat[k+1]; const wx=x*KX,wy=-y; if(k===0)p.moveTo(wx,wy); else p.lineTo(wx,wy);} if(close)p.closePath(); return p; }
 const waterP=new Path2D(), holesP=new Path2D(), parkP=new Path2D(), woodP=new Path2D();
 D.res.forEach((r,i)=>{(i===0?waterP:holesP).addPath(polyPath(r,true));});
@@ -382,6 +392,12 @@ function blit(){
   c.setTransform(k,0,0,k,(W/2+(cv0.vx-vx)*sc-k*CW/2)*dpr,(H/2+(cv0.vy-vy)*sc-k*CH/2)*dpr);
   c.drawImage(cache,0,0);
   c.setTransform(1,0,0,1,0,0);
+  if(me){ // my location: accuracy halo + dot, drawn every frame so it follows pans without a redraw
+    const sx=((me.x-vx)*sc+W/2)*dpr, sy=((me.y-vy)*sc+H/2)*dpr, r=Math.max(me.acc*0.9*sc*dpr, 0);
+    if(r>8*dpr){ c.beginPath(); c.arc(sx,sy,r,0,Math.PI*2); c.fillStyle=C['--sel']; c.globalAlpha=0.12; c.fill(); c.globalAlpha=0.5; c.lineWidth=1*dpr; c.strokeStyle=C['--sel']; c.stroke(); c.globalAlpha=1; }
+    c.beginPath(); c.arc(sx,sy,9*dpr,0,Math.PI*2); c.fillStyle='#ffffff'; c.fill();
+    c.beginPath(); c.arc(sx,sy,6.5*dpr,0,Math.PI*2); c.fillStyle=C['--sel']; c.fill();
+  }
 }
 function maskState(m){ if(!m) return 'unk'; let off=false, known=false; for(let b=0;b<6;b++) if(m&(1<<b)){ const s=isOff(QS[b],T); if(s===null) continue; known=true; if(s) off=true; } return known?(off?'off':'on'):'unk'; }
 function render(){
@@ -438,7 +454,7 @@ function render(){
   }
   if(selected>=0){ const p=new Path2D(); const s=bOff[selected],e=bOff[selected+1]; p.moveTo(P[s],P[s+1]); for(let k=s+2;k<e;k+=2)p.lineTo(P[k],P[k+1]); p.closePath();
     c.strokeStyle=C['--sel']; c.lineWidth=Math.max(2.5/sc,3); c.stroke(p); }
-  if(selected===-2&&selPt){ c.beginPath(); c.arc(selPt[0],selPt[1],Math.max(6/sc,5),0,Math.PI*2); c.fillStyle=C['--sel']; c.fill(); c.lineWidth=Math.max(2/sc,2); c.strokeStyle=C['--land']; c.stroke(); }
+  if(selected===-2&&selPt&&!selIsMe){ c.beginPath(); c.arc(selPt[0],selPt[1],Math.max(6/sc,5),0,Math.PI*2); c.fillStyle=C['--sel']; c.fill(); c.lineWidth=Math.max(2/sc,2); c.strokeStyle=C['--land']; c.stroke(); }
   drawLabels();
   cv0={vx,vy,sc};
 }
@@ -467,7 +483,7 @@ cv.addEventListener('pointermove',e=>{ if(!ptrs.has(e.pointerId)) return; const 
     startInteract(); moved+=10; const mx=(cur[0]+o[0])/2,my=(cur[1]+o[1])/2, pmx=(prev[0]+o[0])/2,pmy=(prev[1]+o[1])/2; vx-=(mx-pmx)/sc; vy-=(my-pmy)/sc; if(d0>0) zoomAt(mx,my,d1/d0); draw(); }
   ptrs.set(e.pointerId,cur); });
 function up(e){ if(!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); cv.classList.remove('drag');
-  if(moved<=3 && e.type==='pointerup'){ const [wx,wy]=toWorld(e.offsetX,e.offsetY); const i=hit(wx,wy); if(i<0&&mode==='zones'){ const m=zoneAt(wx,wy); if(m){ selPt=[wx,wy]; selMask=m; select(-2); return endInteract(); } } select(i); }
+  if(moved<=3 && e.type==='pointerup'){ const [wx,wy]=toWorld(e.offsetX,e.offsetY); const i=hit(wx,wy); if(i<0&&mode==='zones'){ const m=zoneAt(wx,wy); if(m){ selIsMe=false; selPt=[wx,wy]; selMask=m; select(-2); return endInteract(); } } select(i); }
   endInteract(); }
 cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
 cv.addEventListener('wheel',e=>{ e.preventDefault(); startInteract(); zoomAt(e.offsetX,e.offsetY,Math.exp(-e.deltaY*(e.deltaMode?0.05:0.0016))); draw(); endInteract(); },{passive:false});
@@ -514,9 +530,9 @@ $('nowBtn').onclick=()=>{ live=true; const t=kyivNow().date; if(STORE.days[t]&&d
 setInterval(()=>{ const before=T, bd=day; const t=kyivNow().date; if(live&&day!==t&&STORE.days[t]) setDay(t); updateBoard(); if(T!==before||day!==bd) draw(true); },20000);
 
 /* ---------- card ---------- */
-function select(i){ selected=i; $('card').hidden=(i===-1); if(i!==-1) renderCard(); draw(true); }
+function select(i){ if(i!==-2) selIsMe=false; selected=i; $('card').hidden=(i===-1); if(i!==-1) renderCard(); draw(true); }
 function renderCard(){
-  const i=selected, zone=i===-2, m=zone?selMask:B.q[i], exact=zone?false:B.e[i]==='1', addr=zone?'Ділянка на мапі':B.a[i];
+  const i=selected, zone=i===-2, m=zone?selMask:B.q[i], exact=zone?false:B.e[i]==='1', addr=zone?(selIsMe?'Ти тут':'Ділянка на мапі'):B.a[i];
   const qs=QS.filter((_,b)=>m&(1<<b)); const card=$('card'); card.innerHTML='';
   const x=document.createElement('button'); x.className='x'; x.setAttribute('aria-label','Закрити'); x.textContent='×'; x.onclick=()=>select(-1); card.appendChild(x);
   const a=document.createElement('div'); a.className='addr'; a.textContent=addr||'Будинок без підписаної адреси'; card.appendChild(a);
@@ -587,6 +603,41 @@ setInterval(loadSchedule,5*60*1000);
 
 /* ---------- go ---------- */
 const isPhone=()=>matchMedia('(max-width:760px)').matches;
+/* ---------- my location ---------- */
+let geoWatch=null, firstFix=true, toastT=0;
+function toast(msg,ms){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{t.hidden=true;},ms||4000); }
+function placeLocate(){ // keep the button just above the bottom panel
+  const bp=document.querySelector('.bottom'), app=$('app'); if(!bp||!app) return;
+  const gap=app.getBoundingClientRect().bottom-bp.getBoundingClientRect().top;
+  $('locate').style.bottom=(isPhone()?gap+10:Math.max(gap+10,156))+'px'; }
+try{ new ResizeObserver(placeLocate).observe(document.querySelector('.bottom')); }catch(e){}
+window.addEventListener('resize',placeLocate);
+function showMine(center){
+  const i=hit(me.x,me.y);
+  if(center){ vx=me.x; vy=me.y; sc=Math.max(sc,1.3); if(isPhone()){ const bp=document.querySelector('.bottom'); if(bp){ vy+=(bp.getBoundingClientRect().height/2)/sc; } } }
+  if(i>=0){ selIsMe=false; select(i); }
+  else { const m=zoneAt(me.x,me.y); if(m){ selIsMe=true; selPt=[me.x,me.y]; selMask=m; select(-2); } else { select(-1); toast('Біля тебе немає даних про підчергу. Перевір адресу на сайті Черкасиобленерго.'); } }
+  draw(true); }
+$('locate').onclick=()=>{
+  if(!('geolocation' in navigator)){ toast('Цей браузер не вміє визначати місце.'); return; }
+  if(me && geoWatch!==null){ showMine(true); return; }
+  $('locate').dataset.state='wait'; firstFix=true;
+  try{
+    geoWatch=navigator.geolocation.watchPosition(pos=>{
+      const {latitude:la, longitude:lo, accuracy:ac}=pos.coords;
+      me={x:(lo-31.94)*1e5*KX, y:-(la-49.35)*1e5, acc:ac/1.11};
+      $('locate').dataset.state='on';
+      const inside=me.x>cx0-3000&&me.x<cx1+3000&&me.y>cy0-3000&&me.y<cy1+3000;
+      if(firstFix){ firstFix=false;
+        if(!inside){ toast('Здається, ти зараз не в Черкасах. Точка на мапі показує твоє місце, але черг для нього немає.',6000); vx=me.x; vy=me.y; draw(); }
+        else showMine(true);
+      } else draw();
+    }, err=>{
+      $('locate').dataset.state=''; if(geoWatch!==null){ navigator.geolocation.clearWatch(geoWatch); geoWatch=null; }
+      toast(err.code===1?'Немає дозволу на геопозицію. Дозволь доступ до місця для цього сайту в налаштуваннях браузера.':(err.code===3?'Не вдалося визначити місце вчасно. Спробуй ще раз на вулиці або біля вікна.':'Не вдалося визначити місце. Перевір, чи увімкнена геолокація на телефоні.'),6000);
+    }, {enableHighAccuracy:true, maximumAge:15000, timeout:20000});
+  }catch(e){ $('locate').dataset.state=''; toast('Геопозиція тут недоступна.'); }
+};
 function setCollapsed(c,save){ $('board').classList.toggle('collapsed',c); const b=$('boardToggle'); b.setAttribute('aria-expanded',String(!c)); b.setAttribute('aria-label',c?'Розгорнути панель':'Згорнути панель'); if(save){ try{localStorage.setItem('svitlo-board',c?'1':'0');}catch(e){} } }
 { let saved=null; try{saved=localStorage.getItem('svitlo-board');}catch(e){} setCollapsed(isPhone()&&(saved===null||saved==='1'),false); }
 $('boardToggle').onclick=()=>setCollapsed(!$('board').classList.contains('collapsed'),true);
@@ -595,7 +646,7 @@ $('mZones').onclick=()=>setMode('zones'); $('mBld').onclick=()=>setMode('buildin
 if(!Z) $('mZones').disabled=true;
 $('mZones').setAttribute('aria-pressed',String(mode==='zones')); $('mBld').setAttribute('aria-pressed',String(mode==='buildings'));
 $('loading').hidden=true;
-setDay(pickDay()); updateBoard(); resize(); loadSchedule();
+setDay(pickDay()); updateBoard(); resize(); loadSchedule(); placeLocate();
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>draw(true));
 })();
 </script>
