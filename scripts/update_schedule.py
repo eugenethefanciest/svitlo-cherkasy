@@ -30,15 +30,22 @@ LINE_RE = re.compile(r"^\s*([1-6])\.([12])\s*[:\-–—]?\s*(.*?)\s*[;.]?\s*$")
 SLOTS_RE = re.compile(rf"^{SLOT}(?:\s*,\s*{SLOT})*$")
 DATE_RE = re.compile(r"(\d{1,2})\s+(" + "|".join(MONTHS) + r")", re.I)
 NO_OUTAGES_RE = re.compile(r"^(без відключень|не відключа\w*|-|—)?$", re.I)
+GAV_RE = re.compile(r"\bГАВ\b|аварійн\w*\s+(графік\w*|відключен\w*)", re.I)
+GAV_END_RE = re.compile(r"(скасов\w*|припин\w*|завершен\w*|відмін\w*|більше не застосов\w*|не застосовуют\w*)", re.I)
+TIME_FROM_RE = re.compile(r"\bз\s+(\d{1,2}:\d{2})")
 
 
 def kyiv_now():
     """Поточний час у Києві (UTC+2 взимку, UTC+3 влітку) без зовнішніх бібліотек."""
+    return to_kyiv(datetime.now(timezone.utc))
+
+
+def to_kyiv(dt):
     try:
         from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Europe/Kyiv"))
+        return dt.astimezone(ZoneInfo("Europe/Kyiv"))
     except Exception:  # дуже старий Python або немає tzdata
-        now = datetime.now(timezone.utc)
+        now = dt.astimezone(timezone.utc)
         y = now.year
         last_sun = lambda m: max(d for d in range(25, 32) if datetime(y, m, d).weekday() == 6)
         start = datetime(y, 3, last_sun(3), 1, tzinfo=timezone.utc)
@@ -133,9 +140,31 @@ def extract_schedule(post, now):
     if len(found) == len(QUEUES) and all(q in found for q in QUEUES):
         return date, "\n".join(f"{q} {found[q]}" for q in QUEUES)
     # пост про скасування ГПВ на дату (без рядків черг)
-    if not found and re.search(r"(не застосовуват|не будуть застосован|скасован|відмін)", text, re.I):
+    if not found and not GAV_RE.search(text) and re.search(r"(не застосовуват|не будуть застосован|скасован|відмін)", text, re.I):
         return date, "\n".join(f"{q} без відключень" for q in QUEUES)
     return None
+
+
+def extract_gav(post, now):
+    """Пост про аварійні відключення (ГАВ): повертає (date, active, from_time) або None."""
+    text = post["text"]
+    if not GAV_RE.search(text):
+        return None
+    dm = DATE_RE.search(text)
+    if dm:
+        date = to_date(dm.group(1), dm.group(2), now)
+    elif post.get("at"):
+        try:
+            date = to_kyiv(datetime.fromisoformat(post["at"])).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+    else:
+        return None
+    # речення про ГАВ: чи їх запроваджують, чи скасовують
+    sent = " ".join(x for x in re.split(r"(?<=[.!?])\s+|\n", text) if GAV_RE.search(x))
+    active = not GAV_END_RE.search(sent)
+    tm = TIME_FROM_RE.search(sent)
+    return date, active, (tm.group(1).zfill(5) if tm and active else None)
 
 
 def to_utc_iso(at):
@@ -169,8 +198,24 @@ def merge(store, posts, now):
         days[date] = {"text": text, "post": p["post"], "at": at}
         changes.append(f"{date} з поста {p['post']}")
         last = max(last, p["post"])
+    gav = dict(store.get("gav", {}))
+    for p in sorted(posts, key=lambda x: x["post"]):
+        res = extract_gav(p, now)
+        if not res:
+            continue
+        date, active, frm = res
+        cur = gav.get(date)
+        if cur and (cur.get("post") or 0) >= p["post"]:
+            continue
+        gav[date] = {"active": active, "from": frm, "post": p["post"], "at": to_utc_iso(p["at"])}
+        changes.append(f"ГАВ {date} {'діють' if active else 'скасовано'} (пост {p['post']})")
+        last = max(last, p["post"])
     keep = sorted(days)[-KEEP_DAYS:]
-    return {"days": {k: days[k] for k in keep}, "lastPost": last}, changes
+    out = {"days": {k: days[k] for k in keep}, "lastPost": last}
+    gkeep = sorted(gav)[-KEEP_DAYS:]
+    if gkeep:
+        out["gav"] = {k: gav[k] for k in gkeep}
+    return out, changes
 
 
 def main(argv):
@@ -185,7 +230,7 @@ def main(argv):
         return 0
     store = json.loads(SCHEDULE.read_text(encoding="utf-8")) if SCHEDULE.exists() else {"days": {}}
     new, changes = merge(store, posts, now)
-    if new["days"] == store.get("days"):
+    if new["days"] == store.get("days") and new.get("gav") == store.get("gav"):
         print(f"Нових графіків немає (переглянуто постів: {len(posts)}).")
         return 0
     new["checked"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

@@ -41,6 +41,21 @@ def test_rejects_garbage():
     assert u.extract_schedule(partial, NOW) is None
 
 
+def test_gav():
+    on = {"post": 1883, "at": "2026-10-23T07:43:00+00:00", "text":
+          "За командою НЕК «Укренерго» 23 жовтня з 10:32 у Черкаській області застосовано графіки аварійних "
+          "відключень (ГАВ).\nГрафіки погодинних відключень (ГПВ) також діють.\nПросимо економно споживати електроенергію."}
+    assert u.extract_schedule(on, NOW) is None  # не скасування ГПВ!
+    assert u.extract_gav(on, NOW) == ("2026-10-23", True, "10:32")
+    off = {"post": 1884, "at": "2026-10-23T12:00:00+00:00", "text": "Графіки аварійних відключень (ГАВ) скасовано."}
+    assert u.extract_gav(off, NOW) == ("2026-10-23", False, None)  # дата з часу поста
+    st, ch = u.merge({"days": {}}, [on], NOW)
+    assert st["gav"]["2026-10-23"]["active"] and st["days"] == {}
+    st, ch = u.merge(st, [on, off], NOW)
+    assert st["gav"]["2026-10-23"]["active"] is False and st["lastPost"] == 1884
+    assert u.extract_gav({"post": 1, "at": None, "text": "ГПВ на 23 жовтня\n1.1 10:00 - 12:00"}, NOW) is None
+
+
 def test_year_boundary():
     p = {"post": 1, "at": None, "text": "ГПВ на 1 січня\n" + "\n".join(f"{q} 10:00 - 12:00" for q in u.QUEUES)}
     d, _ = u.extract_schedule(p, datetime(2026, 12, 31, 20, 0, tzinfo=timezone.utc))

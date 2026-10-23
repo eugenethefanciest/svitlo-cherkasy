@@ -108,6 +108,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hi
 .legend .l-off{background:var(--off)}
 .legend .l-unk{background:var(--unknown);border:1px solid var(--panel-line)}
 .legend .stale{color:var(--mixed);font-weight:600}
+.gav{padding:10px 14px;max-width:760px;box-sizing:border-box;border-left:4px solid var(--mixed);font-size:13px;line-height:1.45;color:var(--ink);pointer-events:auto}
+.gav b{color:var(--mixed)}
+.gav a{color:var(--ink-2)}
 .legend .src{margin-left:auto;color:var(--ink-2);text-decoration:underline;text-underline-offset:2px}
 .legend .src:hover{color:var(--ink)}
 .legend .osm{color:var(--ink-2);font-size:11px;text-decoration:none}
@@ -199,6 +202,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hi
   </div>
   <div class="panel card" id="card" hidden></div>
   <div class="bottom">
+    <div class="panel gav" id="gavNote" role="status" hidden></div>
     <div class="panel board" id="board">
       <div class="board-head">
         <span class="t">Підчерги Черкас</span>
@@ -249,7 +253,38 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);overflow:hi
 </div>
 </template>
 <div id="root"></div>
-<script type="application/json" id="schedule">{"days": {"2026-10-21": {"text": "1.1 10:00 - 12:00, 16:00 - 18:00\n1.2 10:00 - 12:00, 16:00 - 18:00\n2.1 12:30 - 14:00, 16:00 - 18:00, 22:00 - 24:00\n2.2 16:00 - 18:00, 22:00 - 24:00\n3.1 14:00 - 16:00, 20:00 - 22:00\n3.2 14:00 - 16:00, 20:00 - 22:00\n4.1 12:00 - 14:00, 18:00 - 20:00\n4.2 14:00 - 16:00, 18:00 - 20:00\n5.1 14:00 - 16:00, 20:00 - 22:00\n5.2 10:00 - 12:00, 18:00 - 20:00\n6.1 12:00 - 14:00, 18:00 - 20:00\n6.2 12:00 - 14:00, 20:00 - 22:00", "post": 1877, "at": "2026-10-21T08:41:11Z"}, "2026-10-22": {"text": "1.1 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n1.2 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n2.1 12:00 - 14:00, 18:00 - 20:00\n2.2 12:00 - 14:00, 18:00 - 20:00\n3.1 10:00 - 12:00, 16:00 - 18:00\n3.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n4.1 10:00 - 12:00, 16:00 - 18:00\n4.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n5.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n5.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00", "post": 1880, "at": "2026-10-21T16:23:59Z"}}, "checked": "2026-10-21T17:05:00Z", "lastPost": 1880}</script>
+<script type="application/json" id="schedule">{
+ "days": {
+  "2026-10-19": {
+   "text": "1.1 10:00 - 12:00, 16:00 - 18:00\n1.2 12:00 - 14:00, 18:00 - 20:00\n2.1 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n2.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n3.1 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n3.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n4.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n4.2 10:00 - 12:00, 16:00 - 18:00\n5.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n5.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.1 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n6.2 12:00 - 14:00, 18:00 - 20:00",
+   "post": 1869,
+   "at": "2026-10-18T18:05:32Z"
+  },
+  "2026-10-20": {
+   "text": "1.1 12:00 - 14:00, 16:00 - 18:00, 22:00 - 24:00\n1.2 06:00 - 08:00, 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n2.1 12:00 - 14:00, 20:00 - 22:00\n2.2 12:00 - 14:00, 18:00 - 20:00\n3.1 10:00 - 12:00, 18:00 - 20:00\n3.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n4.1 10:00 - 12:00, 16:00 - 18:00\n4.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n5.1 08:00 - 10:00, 16:00 - 18:00\n5.2 08:00 - 10:00, 14:00 - 16:00, 18:00 - 20:00\n6.1 12:00 - 14:00, 18:00 - 20:00\n6.2 06:00 - 08:00, 10:00 - 12:00, 14:00 - 16:00, 20:00 - 22:00",
+   "post": 1872,
+   "at": "2026-10-19T17:04:17Z"
+  },
+  "2026-10-21": {
+   "text": "1.1 10:00 - 12:00, 16:00 - 18:00\n1.2 10:00 - 12:00, 16:00 - 18:00\n2.1 12:30 - 14:00, 16:00 - 18:00, 22:00 - 24:00\n2.2 16:00 - 18:00, 22:00 - 24:00\n3.1 14:00 - 16:00, 20:00 - 22:00\n3.2 14:00 - 16:00, 20:00 - 22:00\n4.1 12:00 - 14:00, 18:00 - 20:00\n4.2 14:00 - 16:00, 18:00 - 20:00\n5.1 14:00 - 16:00, 20:00 - 22:00\n5.2 10:00 - 12:00, 18:00 - 20:00\n6.1 12:00 - 14:00, 18:00 - 20:00\n6.2 12:00 - 14:00, 20:00 - 22:00",
+   "post": 1877,
+   "at": "2026-10-21T08:41:11Z"
+  },
+  "2026-10-22": {
+   "text": "1.1 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n1.2 06:00 - 08:00, 12:00 - 14:00, 18:00 - 20:00\n2.1 12:00 - 14:00, 18:00 - 20:00\n2.2 12:00 - 14:00, 18:00 - 20:00\n3.1 10:00 - 12:00, 16:00 - 18:00\n3.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n4.1 10:00 - 12:00, 16:00 - 18:00\n4.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n5.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n5.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n6.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00",
+   "post": 1880,
+   "at": "2026-10-21T16:23:59Z"
+  },
+  "2026-10-23": {
+   "text": "1.1 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n1.2 10:00 - 12:00, 16:00 - 18:00, 22:00 - 24:00\n2.1 06:00 - 08:00, 10:00 - 12:00, 16:00 - 18:00\n2.2 06:00 - 08:00, 10:00 - 12:00, 16:00 - 18:00\n3.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n3.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n4.1 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n4.2 08:00 - 10:00, 14:00 - 16:00, 20:00 - 22:00\n5.1 12:00 - 14:00, 18:00 - 20:00\n5.2 12:00 - 14:00, 18:00 - 20:00\n6.1 12:00 - 14:00, 18:00 - 20:00\n6.2 12:00 - 14:00, 18:00 - 20:00",
+   "post": 1882,
+   "at": "2026-10-22T18:57:55Z"
+  }
+ },
+ "lastPost": 1882,
+ "checked": "2026-10-22T19:08:03Z"
+}
+</script>
 <script id="appjs">
 (async function(){
 "use strict";
@@ -507,6 +542,9 @@ function updateBoard(){
   $('whenLbl').innerHTML=(live&&isToday)?'Зараз, <b>'+hm(T)+'</b>':dl+', <b>'+hm(T)+'</b>';
   $('nowBtn').hidden=live&&isToday;
   $('dateLbl').textContent=day?'графік на '+dateUa(day):'графіка ще немає';
+  { const g=STORE.gav&&STORE.gav[now.date]; const el=$('gavNote');
+    if(g&&g.active){ el.innerHTML='<b>⚠ Аварійні відключення'+(g.from?' з '+g.from:'')+'.</b> Світло можуть вимкнути поза графіком, тож мапа зараз показує лише плановий графік. '+(g.post?'<a href="https://t.me/pat_cherkasyoblenergo/'+g.post+'" target="_blank" rel="noopener">Оголошення</a>':''); el.hidden=false; }
+    else el.hidden=true; }
   $('staleNote').innerHTML = !STORE.days[now.date] ? '<span class="stale">Графіка на сьогодні ще немає'+(day?', показано за '+dateUa(day):'')+'</span>' : '';
   // day tabs: today and the next day if published
   const tabs=dayKeys().filter(k=>k>=now.date).slice(0,2); const box=$('days');
@@ -597,8 +635,12 @@ $('edSave').onclick=async()=>{
   finally{ btn.disabled=false; btn.textContent='Зберегти для всіх'; }
 };
 // fresher copy of the schedule published next to the page
-async function loadSchedule(){ try{ const r=await fetch('schedule.json?ts='+Date.now(),{cache:'no-store'}); if(!r.ok) return; const j=await r.json(); if(!j||!j.days) return;
-  const changed=JSON.stringify(j.days)!==JSON.stringify(STORE.days); STORE=j; if(changed){ const keep=day; setDay(STORE.days[keep]&&keep!==kyivNow().date?keep:pickDay()); updateBoard(); draw(true); } }catch(e){} }
+// the GitHub copy is updated by the bot; a local file next to the page may be older, so take the freshest
+const SCHED_URLS=['schedule.json','https://eugenethefanciest.github.io/svitlo-cherkasy/schedule.json'];
+async function getSched(u){ try{ const r=await fetch(u+'?ts='+Date.now(),{cache:'no-store'}); if(!r.ok) return null; const j=await r.json(); return j&&j.days?j:null; }catch(e){ return null; } }
+async function loadSchedule(){ try{ const got=(await Promise.all(SCHED_URLS.map(getSched))).filter(Boolean); if(!got.length) return;
+  const j=got.sort((a,b)=>(b.lastPost||0)-(a.lastPost||0))[0];
+  const changed=JSON.stringify(j.days)!==JSON.stringify(STORE.days); const gch=JSON.stringify(j.gav||null)!==JSON.stringify(STORE.gav||null); STORE=j; if(gch&&!changed) updateBoard(); if(changed){ const keep=day; setDay(STORE.days[keep]&&keep!==kyivNow().date?keep:pickDay()); updateBoard(); draw(true); } }catch(e){} }
 setInterval(loadSchedule,5*60*1000);
 
 /* ---------- go ---------- */
